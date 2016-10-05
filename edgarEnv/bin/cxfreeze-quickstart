@@ -1,0 +1,5 @@
+#!/Users/Brandonium21/Documents/projects/Finaledgar/edgarEnv/bin/python2.7
+from cx_Freeze.setupwriter import main
+
+main()
+
