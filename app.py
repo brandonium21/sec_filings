@@ -114,6 +114,34 @@ class Filing(object):
     def __repr__(self):
         return '{} - {}'.format(self.__class__, self.date)
 
+def _get_filing_from_document_page(document_page_url):
+    '''Find the XBRL link on a page like 
+    http://www.sec.gov/Archives/edgar/data/320193/000119312513300670/0001193125-13-300670-index.htm
+    http://www.sec.gov/Archives/edgar/data/1350653/000135065316000097/atec-20160630-index.htm
+    '''
+    filing_page = get_edgar_soup(url=document_page_url)
+    period_of_report_elem = filing_page.find('div', text='Filing Date')
+    filing_date = period_of_report_elem.findNext('div', {'class' : 'info'}).text
+    filing_date = datetime.date(*map(int, filing_date.split('-')))
+    type_tds = filing_page.findAll('td', text='EX-101.INS')
+    xbrl_link = ''
+    for type_td in type_tds:
+        try:
+            xbrl_link = type_td.findPrevious('a', text=re.compile('\.xml$')).parent['href']
+        except AttributeError:
+            continue
+        else:
+            if not re.match(pattern='\d\.xml$', string=xbrl_link):
+                # we don't want files of the form 'jcp-20120504_def.xml'
+                continue
+            else:
+                break
+    xbrl_url = urljoin('http://www.sec.gov', xbrl_link)
+    print "url checked: " + xbrl_url
+    filing = Filing.from_xbrl_url(filing_date=filing_date, xbrl_url=xbrl_url)
+    return filing
+
+
 def get_filings(symbol, filing_type):
     '''Get the last xbrl filed before date.
         Returns a Filing object, return None if there are no XBRL documents
@@ -150,30 +178,7 @@ def _get_document_page_urls(symbol, filing_type):
         documents_url = 'http://sec.gov' + documents_page
         yield documents_url
 
-def _get_filing_from_document_page(document_page_url):
-    '''Find the XBRL link on a page like 
-    http://www.sec.gov/Archives/edgar/data/320193/000119312513300670/0001193125-13-300670-index.htm
-    http://www.sec.gov/Archives/edgar/data/1350653/000135065316000097/atec-20160630-index.htm
-    '''
-    filing_page = get_edgar_soup(url=document_page_url)
-    period_of_report_elem = filing_page.find('div', text='Filing Date')
-    filing_date = period_of_report_elem.findNext('div', {'class' : 'info'}).text
-    filing_date = datetime.date(*map(int, filing_date.split('-')))
-    type_tds = filing_page.findAll('td', text='EX-101.INS')
-    for type_td in type_tds:
-        try:
-            xbrl_link = type_td.findPrevious('a', text=re.compile('\.xml$')).parent['href']
-        except AttributeError:
-            continue
-        else:
-            if not re.match(pattern='\d\.xml$', string=xbrl_link):
-                # we don't want files of the form 'jcp-20120504_def.xml'
-                continue
-            else:
-                break
-    xbrl_url = urljoin('http://www.sec.gov', xbrl_link)
-    filing = Filing.from_xbrl_url(filing_date=filing_date, xbrl_url=xbrl_url)
-    return filing
+
 
 def _filing_sort_key_func(filing_or_date):
     if isinstance(filing_or_date, Filing):
